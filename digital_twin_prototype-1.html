@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Civic Vision — Nagpur Digital Twin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --ink: #0B0F15;
+    --panel: #131A23;
+    --panel-2: #1A2330;
+    --border: #263042;
+    --text: #E7ECF3;
+    --text-dim: #8B98AC;
+    --text-faint: #5C6980;
+    --brand: #5B6EF5;
+    --brand-dim: #333F73;
+    --free: #2FBF8F;
+    --moderate: #F0A93C;
+    --heavy: #E5484D;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{
+    background:var(--ink); color:var(--text); font-family:var(--sans);
+    width:100%; height:100%; overflow-x:hidden;
+  }
+  .app{
+    display:grid;
+    grid-template-columns: 1fr 360px;
+    grid-template-rows: auto 1fr auto;
+    grid-template-areas:
+      "header header"
+      "map side"
+      "feeds side";
+    min-height:100vh;
+    gap:1px;
+    background:var(--border);
+  }
+  header{
+    grid-area:header;
+    background:var(--panel);
+    padding:18px 28px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:14px;
+  }
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .brand-mark{
+    width:34px; height:34px; border-radius:8px;
+    background:linear-gradient(135deg, var(--brand), #8A6EF5);
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-weight:600; font-size:14px; color:white;
+  }
+  .brand-text h1{ font-size:16px; font-weight:600; letter-spacing:0.2px; }
+  .brand-text p{ font-size:12px; color:var(--text-dim); margin-top:2px; }
+  .pipeline{
+    display:flex; align-items:center; gap:6px;
+    font-family:var(--mono); font-size:12px; color:var(--text-faint);
+  }
+  .pipeline .stage{
+    padding:6px 12px; border-radius:20px; border:1px solid var(--border);
+    transition:all .35s ease;
+  }
+  .pipeline .stage.active{
+    color:var(--ink); background:var(--free); border-color:var(--free);
+    font-weight:600;
+  }
+  .pipeline .sep{ color:var(--text-faint); }
+
+  /* MAP */
+  .map-wrap{
+    grid-area:map;
+    background:var(--panel);
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    min-height:520px;
+  }
+  .map-toolbar{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:16px 20px 0 20px;
+  }
+  .map-toolbar h2{ font-size:14px; font-weight:600; color:var(--text); }
+  .map-toolbar .legend{ display:flex; gap:14px; font-size:11px; color:var(--text-dim); }
+  .legend .dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+  svg#cityMap{ width:100%; flex:1; }
+  .road{ fill:none; stroke-linecap:round; transition:stroke .5s ease, stroke-width .4s ease, opacity .4s ease; cursor:pointer; }
+  .road:hover{ opacity:0.85; }
+  .road-closed{ stroke-dasharray:2 10; opacity:0.35; }
+  .flow-dot{ opacity:0.9; }
+  .node circle.hub{ fill:var(--panel-2); stroke:var(--border); stroke-width:1.5; }
+  .node text{ font-family:var(--mono); font-size:10px; fill:var(--text-dim); }
+  .cam-badge{ fill:var(--panel); stroke:var(--brand); stroke-width:1.2; }
+  .cam-badge.pulse{ animation:pulse 2s infinite; }
+  @keyframes pulse{ 0%{stroke-opacity:1;} 50%{stroke-opacity:0.3;} 100%{stroke-opacity:1;} }
+  .road-label{ font-family:var(--mono); font-size:9px; fill:var(--text-faint); pointer-events:none; }
+  .red-zone{ animation:zonepulse 2.2s ease-in-out infinite; pointer-events:none; }
+  @keyframes zonepulse{ 0%{opacity:0.55;} 50%{opacity:0.85;} 100%{opacity:0.55;} }
+  .red-zone-label{
+    font-family:var(--mono); font-size:10px; font-weight:600; fill:var(--heavy);
+    text-anchor:middle; pointer-events:none; letter-spacing:0.4px;
+  }
+
+  /* FEEDS STRIP */
+  .feeds{
+    grid-area:feeds;
+    background:var(--panel);
+    padding:16px 20px 20px 20px;
+    display:flex; gap:14px; flex-wrap:wrap;
+  }
+  .cam-card{
+    flex:1; min-width:190px;
+    background:var(--panel-2); border:1px solid var(--border); border-radius:10px;
+    padding:12px 14px;
+  }
+  .cam-card .cam-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
+  .cam-card .cam-name{ font-size:12px; font-weight:600; color:var(--text); }
+  .live-tag{ font-family:var(--mono); font-size:9px; color:var(--free); border:1px solid var(--free); border-radius:10px; padding:1px 7px; }
+  .cam-count{ font-family:var(--mono); font-size:24px; font-weight:600; color:var(--text); }
+  .cam-sub{ font-size:11px; color:var(--text-dim); margin-top:2px; }
+
+  /* SIDE PANEL */
+  .side{
+    grid-area:side;
+    background:var(--panel);
+    padding:20px;
+    display:flex; flex-direction:column; gap:18px;
+    overflow-y:auto;
+  }
+  .side h3{ font-size:12px; text-transform:none; color:var(--text-dim); font-weight:600; margin-bottom:10px; }
+  .card{ background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:14px; }
+  .field{ margin-bottom:12px; }
+  .field label{ display:block; font-size:12px; color:var(--text-dim); margin-bottom:6px; }
+  select, button.run{
+    width:100%; background:var(--ink); color:var(--text); border:1px solid var(--border);
+    border-radius:8px; padding:9px 10px; font-family:var(--sans); font-size:13px;
+  }
+  .scenario-list{ display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+  .scenario-opt{
+    display:flex; align-items:center; gap:9px; padding:9px 10px;
+    border:1px solid var(--border); border-radius:8px; cursor:pointer; font-size:13px;
+    background:var(--ink);
+    transition:border-color .2s ease, background .2s ease;
+  }
+  .scenario-opt.selected{ border-color:var(--brand); background:var(--brand-dim); }
+  .scenario-opt input{ accent-color:var(--brand); }
+  button.run{
+    background:var(--brand); border-color:var(--brand); color:white; font-weight:600;
+    cursor:pointer; margin-top:4px;
+  }
+  button.run:hover{ background:#4a5de0; }
+  button.run:disabled{ opacity:0.5; cursor:not-allowed; }
+
+  .metric-row{ display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid var(--border); font-size:12px; }
+  .metric-row:last-child{ border-bottom:none; }
+  .metric-val{ font-family:var(--mono); font-weight:600; }
+
+  .plans{ display:flex; flex-direction:column; gap:10px; }
+  .plan{
+    border:1px solid var(--border); border-radius:9px; padding:11px 12px; background:var(--ink);
+  }
+  .plan.recommended{ border-color:var(--free); background:linear-gradient(180deg, rgba(47,191,143,0.08), transparent); }
+  .plan.previewing{ box-shadow:0 0 0 1.5px var(--brand) inset; }
+  .preview-btn{
+    margin-top:8px; width:100%; background:transparent; color:var(--text-dim);
+    border:1px solid var(--border); border-radius:6px; padding:6px 8px;
+    font-family:var(--sans); font-size:11px; cursor:pointer;
+  }
+  .preview-btn:hover{ color:var(--text); border-color:var(--brand); }
+  .plan-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .plan-name{ font-size:12px; font-weight:600; }
+  .badge-rec{ font-family:var(--mono); font-size:9px; color:var(--free); border:1px solid var(--free); border-radius:10px; padding:1px 6px; }
+  .bar-row{ display:flex; align-items:center; gap:8px; margin-bottom:5px; }
+  .bar-label{ font-size:10px; color:var(--text-dim); width:78px; flex-shrink:0; }
+  .bar-track{ flex:1; height:6px; background:var(--panel-2); border-radius:4px; overflow:hidden; }
+  .bar-fill{ height:100%; border-radius:4px; transition:width .6s ease; }
+  .bar-val{ font-family:var(--mono); font-size:10px; color:var(--text-dim); width:44px; text-align:right; flex-shrink:0; }
+
+  .empty-hint{ font-size:12px; color:var(--text-faint); line-height:1.5; }
+
+  @media (max-width:880px){
+    .app{ grid-template-columns:1fr; grid-template-areas:"header" "map" "feeds" "side"; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="brand">
+      <div class="brand-mark">CV</div>
+      <div class="brand-text">
+        <h1>Nagpur Digital Twin — "What-If?" Simulator</h1>
+        <p>Civic Vision · SIH26124 · AI-Powered Urban Intelligence</p>
+      </div>
+    </div>
+    <div class="pipeline" id="pipeline">
+      <span class="stage" data-stage="predict">Predict</span><span class="sep">→</span>
+      <span class="stage" data-stage="compare">Compare</span><span class="sep">→</span>
+      <span class="stage" data-stage="optimize">Optimize</span><span class="sep">→</span>
+      <span class="stage" data-stage="recommend">Recommend</span>
+    </div>
+  </header>
+
+  <div class="map-wrap">
+    <div class="map-toolbar">
+      <h2>Live city model</h2>
+      <div class="legend">
+        <span><span class="dot" style="background:var(--free)"></span>Free flow</span>
+        <span><span class="dot" style="background:var(--moderate)"></span>Moderate</span>
+        <span><span class="dot" style="background:var(--heavy)"></span>Heavy</span>
+        <span><span class="dot" style="background:var(--heavy); opacity:0.4"></span>Red zone (Plan A risk)</span>
+      </div>
+    </div>
+    <svg id="cityMap" viewBox="0 0 900 480"></svg>
+  </div>
+
+  <div class="feeds" id="feeds"></div>
+
+  <div class="side">
+    <div>
+      <h3>What-if scenario</h3>
+      <div class="card">
+        <div class="scenario-list" id="scenarioList"></div>
+
+        <div class="field" id="targetField">
+          <label id="targetLabel">Target road</label>
+          <select id="targetSelect"></select>
+        </div>
+
+        <button class="run" id="runBtn">Run simulation</button>
+      </div>
+    </div>
+
+    <div>
+      <h3>Live network status</h3>
+      <div class="card" id="statusCard"></div>
+    </div>
+
+    <div>
+      <h3>Plan comparison</h3>
+      <div class="card" id="comparePanel">
+        <p class="empty-hint">Run a simulation to compare Plan A (do nothing), Plan B (reroute), and Plan C (optimized + emergency corridor).</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ---------- graph data: stylized Nagpur road network ---------- */
+const nodes = [
+  {id:'zeromile', name:'Zero Mile', x:430, y:250, camera:true},
+  {id:'sitabuldi', name:'Sitabuldi', x:340, y:290, camera:true},
+  {id:'civillines', name:'Civil Lines', x:250, y:220, camera:false},
+  {id:'kamptee', name:'Kamptee Rd Jn.', x:470, y:100, camera:true},
+  {id:'amravati', name:'Amravati Rd Jn.', x:230, y:150, camera:false},
+  {id:'wardha', name:'Wardha Rd Jn.', x:260, y:400, camera:true},
+  {id:'sadar', name:'Sadar', x:520, y:170, camera:false},
+  {id:'kadbi', name:'Kadbi Chowk', x:540, y:340, camera:true},
+  {id:'central', name:'Central Ave Jn.', x:660, y:260, camera:false},
+  {id:'wardhaman', name:'Wardhaman Nagar', x:680, y:380, camera:false},
+];
+
+const roads = [
+  {id:'r1', name:'Central Avenue Rd', from:'zeromile', to:'central', base:0.35},
+  {id:'r2', name:'Kamptee Road', from:'zeromile', to:'kamptee', base:0.55},
+  {id:'r3', name:'Amravati Road', from:'sitabuldi', to:'amravati', base:0.4},
+  {id:'r4', name:'Wardha Road', from:'sitabuldi', to:'wardha', base:0.6},
+  {id:'r5', name:'Sadar Link', from:'zeromile', to:'sadar', base:0.3},
+  {id:'r6', name:'Kadbi Chowk Link', from:'zeromile', to:'kadbi', base:0.45},
+  {id:'r7', name:'Civil Lines Road', from:'zeromile', to:'civillines', base:0.25},
+  {id:'r8', name:'Wardhaman Nagar Rd', from:'kadbi', to:'wardhaman', base:0.3},
+  {id:'r9', name:'Zero Mile — Sitabuldi Rd', from:'zeromile', to:'sitabuldi', base:0.5},
+  {id:'r10', name:'Kamptee — Sadar Link', from:'kamptee', to:'sadar', base:0.2},
+];
+
+const nodeById = Object.fromEntries(nodes.map(n=>[n.id,n]));
+const roadsAt = id => roads.filter(r=>r.from===id || r.to===id);
+
+/* ---------- state ---------- */
+let liveCongestion = {}; // roadId -> 0..1
+roads.forEach(r=> liveCongestion[r.id] = r.base);
+let selectedScenario = 'none';
+let selectedTarget = null;
+let lastSim = null;
+
+/* ---------- render map ---------- */
+const svg = document.getElementById('cityMap');
+
+function congestionColor(v){
+  if(v < 0.4) return getCss('--free');
+  if(v < 0.7) return getCss('--moderate');
+  return getCss('--heavy');
+}
+function getCss(varName){ return getComputedStyle(document.documentElement).getPropertyValue(varName).trim(); }
+
+function drawMap(){
+  svg.innerHTML = '';
+  // defs (blur filter for the red-zone overlay)
+  const defs = document.createElementNS('http://www.w3.org/2000/svg','defs');
+  defs.innerHTML = `<filter id="zoneBlur" x="-60%" y="-60%" width="220%" height="220%">
+    <feGaussianBlur stdDeviation="14"/>
+  </filter>`;
+  svg.appendChild(defs);
+  // roads
+  roads.forEach(r=>{
+    const a = nodeById[r.from], b = nodeById[r.to];
+    const path = document.createElementNS('http://www.w3.org/2000/svg','line');
+    path.setAttribute('x1', a.x); path.setAttribute('y1', a.y);
+    path.setAttribute('x2', b.x); path.setAttribute('y2', b.y);
+    path.classList.add('road');
+    path.dataset.roadId = r.id;
+    path.setAttribute('stroke-width', 6);
+    svg.appendChild(path);
+
+    const mx = (a.x+b.x)/2, my=(a.y+b.y)/2;
+    const label = document.createElementNS('http://www.w3.org/2000/svg','text');
+    label.setAttribute('x', mx); label.setAttribute('y', my-8);
+    label.setAttribute('text-anchor','middle');
+    label.classList.add('road-label');
+    label.textContent = r.name;
+    svg.appendChild(label);
+  });
+  // nodes
+  nodes.forEach(n=>{
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.classList.add('node');
+    const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('cx', n.x); c.setAttribute('cy', n.y); c.setAttribute('r', 14);
+    c.classList.add('hub');
+    g.appendChild(c);
+    if(n.camera){
+      const cam = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      cam.setAttribute('cx', n.x+11); cam.setAttribute('cy', n.y-11); cam.setAttribute('r',5);
+      cam.classList.add('cam-badge','pulse');
+      g.appendChild(cam);
+    }
+    const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x', n.x); t.setAttribute('y', n.y+27);
+    t.setAttribute('text-anchor','middle');
+    t.textContent = n.name;
+    g.appendChild(t);
+    svg.appendChild(g);
+  });
+  updateMapColors();
+}
+
+function updateMapColors(){
+  roads.forEach(r=>{
+    const el = svg.querySelector(`[data-road-id="${r.id}"]`);
+    if(!el) return;
+    const v = liveCongestion[r.id];
+    if(v <= 0.02){
+      el.classList.add('road-closed');
+      el.setAttribute('stroke', getCss('--text-faint'));
+    } else {
+      el.classList.remove('road-closed');
+      el.setAttribute('stroke', congestionColor(v));
+    }
+    el.setAttribute('stroke-width', 3 + v*8);
+  });
+}
+
+/* ---------- red zone overlay (Plan A risk area) ---------- */
+function zoneCenterAndRadius(){
+  const target = targetSelect.value;
+  let cx, cy;
+  if(selectedScenario === 'festival'){
+    const n = nodeById[target];
+    cx = n.x; cy = n.y;
+  } else {
+    const r = roads.find(x=>x.id===target);
+    const a = nodeById[r.from], b = nodeById[r.to];
+    cx = (a.x+b.x)/2; cy = (a.y+b.y)/2;
+  }
+  return {cx, cy, r: 95};
+}
+
+function drawRedZone(){
+  removeRedZone();
+  const {cx, cy, r} = zoneCenterAndRadius();
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+  g.setAttribute('id','redZoneGroup');
+  g.classList.add('red-zone');
+
+  const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+  circle.setAttribute('cx', cx); circle.setAttribute('cy', cy); circle.setAttribute('r', r);
+  circle.setAttribute('fill', getCss('--heavy'));
+  circle.setAttribute('fill-opacity', '0.22');
+  circle.setAttribute('filter', 'url(#zoneBlur)');
+  g.appendChild(circle);
+
+  const ring = document.createElementNS('http://www.w3.org/2000/svg','circle');
+  ring.setAttribute('cx', cx); ring.setAttribute('cy', cy); ring.setAttribute('r', r*0.7);
+  ring.setAttribute('fill', 'none');
+  ring.setAttribute('stroke', getCss('--heavy'));
+  ring.setAttribute('stroke-width', '1.4');
+  ring.setAttribute('stroke-dasharray', '4 5');
+  ring.setAttribute('opacity', '0.75');
+  g.appendChild(ring);
+
+  const label = document.createElementNS('http://www.w3.org/2000/svg','text');
+  label.setAttribute('x', cx); label.setAttribute('y', cy - r*0.7 - 8);
+  label.classList.add('red-zone-label');
+  label.textContent = 'RISK ZONE — PLAN A';
+  g.appendChild(label);
+
+  // insert below node labels but above roads: put right after defs so roads/nodes render on top edges remain visible
+  svg.insertBefore(g, svg.children[1] || null);
+}
+function removeRedZone(){
+  const g = svg.querySelector('#redZoneGroup');
+  if(g) g.remove();
+}
+
+/* ---------- camera feeds ---------- */
+const feedsEl = document.getElementById('feeds');
+const cameraNodes = nodes.filter(n=>n.camera);
+function renderFeeds(){
+  feedsEl.innerHTML = '';
+  cameraNodes.forEach(n=>{
+    const card = document.createElement('div');
+    card.className = 'cam-card';
+    card.innerHTML = `
+      <div class="cam-head">
+        <span class="cam-name">${n.name} Cam</span>
+        <span class="live-tag">LIVE</span>
+      </div>
+      <div class="cam-count" id="count-${n.id}">--</div>
+      <div class="cam-sub">vehicles detected / min</div>`;
+    feedsEl.appendChild(card);
+  });
+}
+function tickFeeds(){
+  cameraNodes.forEach(n=>{
+    const connected = roadsAt(n.id);
+    const avg = connected.reduce((s,r)=>s+liveCongestion[r.id],0) / (connected.length||1);
+    const base = Math.round(20 + avg*160);
+    const noise = Math.round((Math.random()-0.5)*14);
+    const el = document.getElementById(`count-${n.id}`);
+    if(el) el.textContent = Math.max(0, base+noise);
+  });
+}
+
+/* ---------- status card ---------- */
+function renderStatus(){
+  const values = Object.values(liveCongestion);
+  const avg = values.reduce((a,b)=>a+b,0)/values.length;
+  const heavy = roads.filter(r=>liveCongestion[r.id]>=0.7).length;
+  const closed = roads.filter(r=>liveCongestion[r.id]<=0.02).length;
+  document.getElementById('statusCard').innerHTML = `
+    <div class="metric-row"><span>Network congestion index</span><span class="metric-val" style="color:${congestionColor(avg)}">${Math.round(avg*100)}%</span></div>
+    <div class="metric-row"><span>Roads in heavy congestion</span><span class="metric-val">${heavy}</span></div>
+    <div class="metric-row"><span>Roads closed</span><span class="metric-val">${closed}</span></div>
+    <div class="metric-row"><span>Active scenario</span><span class="metric-val">${scenarioLabel(selectedScenario)}</span></div>
+  `;
+}
+function scenarioLabel(id){
+  return {none:'None', close:'Road closure', festival:'Festival / event', surge:'Traffic surge'}[id] || 'None';
+}
+
+/* ---------- scenario controls ---------- */
+const scenarios = [
+  {id:'close', label:'Road closure', desc:'Block a road entirely and observe reroute impact.'},
+  {id:'festival', label:'Festival / event', desc:'Heavy pedestrian + vehicle load around a junction.'},
+  {id:'surge', label:'Traffic surge', desc:'Sudden demand spike on one corridor.'},
+];
+const scenarioListEl = document.getElementById('scenarioList');
+scenarios.forEach(s=>{
+  const div = document.createElement('label');
+  div.className = 'scenario-opt';
+  div.innerHTML = `<input type="radio" name="scenario" value="${s.id}"> <span>${s.label}</span>`;
+  div.addEventListener('click', ()=>{
+    selectedScenario = s.id;
+    document.querySelectorAll('.scenario-opt').forEach(o=>o.classList.remove('selected'));
+    div.classList.add('selected');
+    div.querySelector('input').checked = true;
+    populateTargetSelect();
+  });
+  scenarioListEl.appendChild(div);
+});
+
+const targetLabel = document.getElementById('targetLabel');
+const targetSelect = document.getElementById('targetSelect');
+function populateTargetSelect(){
+  targetSelect.innerHTML = '';
+  if(selectedScenario === 'festival'){
+    targetLabel.textContent = 'Event location';
+    nodes.forEach(n=>{
+      const opt = document.createElement('option'); opt.value = n.id; opt.textContent = n.name;
+      targetSelect.appendChild(opt);
+    });
+  } else {
+    targetLabel.textContent = selectedScenario === 'surge' ? 'Surging corridor' : 'Road to close';
+    roads.forEach(r=>{
+      const opt = document.createElement('option'); opt.value = r.id; opt.textContent = r.name;
+      targetSelect.appendChild(opt);
+    });
+  }
+}
+populateTargetSelect();
+// default select first scenario
+scenarioListEl.querySelector('.scenario-opt').click();
+
+/* ---------- pipeline breadcrumb ---------- */
+function setStage(stage){
+  document.querySelectorAll('.pipeline .stage').forEach(s=>{
+    s.classList.toggle('active', s.dataset.stage===stage);
+  });
+}
+setStage('predict');
+
+/* ---------- simulation logic ---------- */
+function computePlan(mode){
+  // mode: 'A' baseline, 'B' reroute, 'C' optimized
+  const cong = {}; roads.forEach(r=> cong[r.id] = r.base);
+  const target = targetSelect.value;
+
+  function applyScenarioBase(){
+    if(selectedScenario === 'close'){
+      cong[target] = 0; // closed
+    } else if(selectedScenario === 'surge'){
+      cong[target] = Math.min(1, cong[target]*2.1);
+    } else if(selectedScenario === 'festival'){
+      roadsAt(target).forEach(r=> cong[r.id] = Math.min(1, cong[r.id]*1.9));
+    }
+  }
+  applyScenarioBase();
+
+  if(mode === 'A'){
+    // do nothing further — displaced load just piles onto the nearest road, worst case
+    if(selectedScenario === 'close'){
+      const r = roads.find(x=>x.id===target);
+      [r.from, r.to].forEach(nodeId=>{
+        const alts = roadsAt(nodeId).filter(x=>x.id!==target);
+        alts.forEach(a=> cong[a.id] = Math.min(1, cong[a.id] + r.base*0.9/(alts.length||1)));
+      });
+    }
+    return cong;
+  }
+
+  if(mode === 'B'){
+    // reroute: redistribute displaced load evenly and a bit more gently
+    if(selectedScenario === 'close'){
+      const r = roads.find(x=>x.id===target);
+      [r.from, r.to].forEach(nodeId=>{
+        const alts = roadsAt(nodeId).filter(x=>x.id!==target);
+        alts.forEach(a=> cong[a.id] = Math.min(1, cong[a.id] + r.base*0.55/(alts.length||1)));
+      });
+    } else if(selectedScenario === 'surge' || selectedScenario === 'festival'){
+      const affected = selectedScenario==='surge' ? [target] : roadsAt(target).map(r=>r.id);
+      affected.forEach(rid=>{
+        cong[rid] = Math.max(cong[rid]*0.85, roads.find(x=>x.id===rid).base);
+      });
+    }
+    return cong;
+  }
+
+  if(mode === 'C'){
+    // optimized + emergency corridor: proactive signal timing & bus priority damps peaks further
+    if(selectedScenario === 'close'){
+      const r = roads.find(x=>x.id===target);
+      [r.from, r.to].forEach(nodeId=>{
+        const alts = roadsAt(nodeId).filter(x=>x.id!==target);
+        alts.forEach(a=> cong[a.id] = Math.min(1, cong[a.id] + r.base*0.32/(alts.length||1)));
+      });
+    } else if(selectedScenario === 'surge' || selectedScenario === 'festival'){
+      const affected = selectedScenario==='surge' ? [target] : roadsAt(target).map(r=>r.id);
+      affected.forEach(rid=>{
+        cong[rid] = Math.max(cong[rid]*0.65, roads.find(x=>x.id===rid).base);
+      });
+    }
+    return cong;
+  }
+}
+
+function metricsFor(cong){
+  const vals = Object.values(cong);
+  const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
+  const travelTime = Math.round(18 + avg*40); // minutes, pseudo
+  const delay = Math.round(avg*22); // minutes
+  const congestionIdx = Math.round(avg*100);
+  return {travelTime, delay, congestionIdx};
+}
+
+let currentPreview = null; // 'A' | 'B' | 'C'
+
+function runSimulation(){
+  setStage('predict');
+  const planA = computePlan('A');
+  const planB = computePlan('B');
+  const planC = computePlan('C');
+  const mA = metricsFor(planA), mB = metricsFor(planB), mC = metricsFor(planC);
+
+  lastSim = {planA, planB, planC, mA, mB, mC};
+
+  // default view: show Plan A with its red zone first, so the "do nothing" risk is visible up front
+  if(selectedScenario === 'none'){
+    liveCongestion = Object.fromEntries(roads.map(r=>[r.id,r.base]));
+    removeRedZone();
+    currentPreview = null;
+  } else {
+    previewPlan('A');
+  }
+  renderStatus();
+
+  setTimeout(()=> setStage('compare'), 300);
+  setTimeout(()=> renderCompare(mA, mB, mC), 400);
+  setTimeout(()=> setStage('optimize'), 900);
+  setTimeout(()=> setStage('recommend'), 1500);
+}
+
+function previewPlan(key){
+  if(!lastSim) return;
+  currentPreview = key;
+  const congByKey = {A:lastSim.planA, B:lastSim.planB, C:lastSim.planC};
+  liveCongestion = congByKey[key];
+  updateMapColors();
+  if(key === 'A'){
+    drawRedZone();
+  } else {
+    removeRedZone();
+  }
+  renderStatus();
+  document.querySelectorAll('.plan').forEach(el=> el.classList.toggle('previewing', el.dataset.plan===key));
+}
+
+function renderCompare(mA, mB, mC){
+  const plans = [
+    {key:'A', name:'Plan A — Do nothing', m:mA},
+    {key:'B', name:'Plan B — Reroute', m:mB},
+    {key:'C', name:'Plan C — Optimized + corridor', m:mC},
+  ];
+  const best = plans.reduce((b,p)=> p.m.congestionIdx < b.m.congestionIdx ? p : b, plans[0]);
+  const maxTT = Math.max(...plans.map(p=>p.m.travelTime));
+  const maxDelay = Math.max(...plans.map(p=>p.m.delay), 1);
+
+  const panel = document.getElementById('comparePanel');
+  panel.innerHTML = `<div class="plans">` + plans.map(p=>{
+    const rec = p.key === best.key;
+    return `
+      <div class="plan ${rec ? 'recommended':''}" data-plan="${p.key}">
+        <div class="plan-head">
+          <span class="plan-name">${p.name}${p.key==='A' ? ' <span style=\"color:var(--heavy); font-weight:600;\">(red zone)</span>' : ''}</span>
+          ${rec ? '<span class="badge-rec">RECOMMENDED</span>' : ''}
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Travel time</span>
+          <div class="bar-track"><div class="bar-fill" style="width:${(p.m.travelTime/maxTT)*100}%; background:${congestionColor(p.m.congestionIdx/100)}"></div></div>
+          <span class="bar-val">${p.m.travelTime}m</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Delay</span>
+          <div class="bar-track"><div class="bar-fill" style="width:${(p.m.delay/maxDelay)*100}%; background:${congestionColor(p.m.congestionIdx/100)}"></div></div>
+          <span class="bar-val">${p.m.delay}m</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Congestion</span>
+          <div class="bar-track"><div class="bar-fill" style="width:${p.m.congestionIdx}%; background:${congestionColor(p.m.congestionIdx/100)}"></div></div>
+          <span class="bar-val">${p.m.congestionIdx}%</span>
+        </div>
+        <button class="preview-btn" data-preview="${p.key}">View on map</button>
+      </div>`;
+  }).join('') + `</div>`;
+
+  panel.querySelectorAll('.preview-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> previewPlan(btn.dataset.preview));
+  });
+
+  // start on Plan A preview so the red zone is visible immediately
+  if(selectedScenario !== 'none') previewPlan('A');
+}
+
+document.getElementById('runBtn').addEventListener('click', runSimulation);
+
+/* ---------- init ---------- */
+drawMap();
+renderFeeds();
+renderStatus();
+tickFeeds();
+setInterval(tickFeeds, 1800);
+</script>
+</body>
+</html>
